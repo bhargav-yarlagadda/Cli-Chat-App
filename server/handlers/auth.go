@@ -117,6 +117,47 @@ func login(c *fiber.Ctx) error {
 // 1. Extract token from header.
 // 2. Parse and verify JWT using the secret.
 // 3. Return valid/invalid response.
+
+func JWTMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		tokenStr := c.Get("Authorization")
+		if tokenStr == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
+		}
+
+		const prefix = "Bearer "
+		if len(tokenStr) > len(prefix) && tokenStr[:len(prefix)] == prefix {
+			tokenStr = tokenStr[len(prefix):]
+		}
+
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			fmt.Println("Missing JWT_SECRET")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Server misconfigured"})
+		}
+
+		// Parse the token
+		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			// Validate signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fiber.ErrUnauthorized
+			}
+			return []byte(secret), nil
+		})
+
+		if err != nil || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+
+		// Store claims in Fiber Locals
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			c.Locals("user", claims)
+		}
+
+		// Call next handler
+		return c.Next()
+	}
+}
 func validate(c *fiber.Ctx) error {
 	
 	tokenStr := c.Get("Authorization")

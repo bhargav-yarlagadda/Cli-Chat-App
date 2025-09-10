@@ -27,7 +27,10 @@ func main(){
 	})
 	AuthRoutes := app.Group("/auth")
 	handlers.HandleAuth(AuthRoutes)
-	
+
+	ConnectionRoutes := app.Group("/connections")
+	ConnectionRoutes.Use(handlers.JWTMiddleware()) // to validate the jwt sent by user
+	handlers.HandleConnections(ConnectionRoutes)
 	err=app.Listen(PORT)
 	if err != nil { 
 		log.Fatal("Error in staring the server ",err)

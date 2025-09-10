@@ -88,4 +88,31 @@ func Login(args []string) {
 	os.Setenv("JWT_TOKEN", JWTToken) // optional: makes it available as env variable
 
 	fmt.Println("Login successful! JWT stored for session.")
+	pendingResp, err := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetAuthToken(JWTToken).
+		Get(utils.BaseURL + "/connections/pending/count")
+
+	if err != nil {
+		log.Println("Failed to fetch pending requests count:", err)
+		return
+	}
+
+	if pendingResp.StatusCode() != 200 {
+		log.Println("Could not get pending requests:", pendingResp.String())
+		return
+	}
+
+	var pendingData struct {
+		PendingCount int `json:"pending_count"`
+	}
+
+	if err := json.Unmarshal(pendingResp.Body(), &pendingData); err != nil {
+		log.Println("Failed to parse pending count:", err)
+		return
+	}
+
+	if pendingData.PendingCount > 0 {
+		fmt.Printf("You have %d pending connection request(s)!\n please use `view-requests` command to view pending connection requests\n", pendingData.PendingCount)
+	}
 }

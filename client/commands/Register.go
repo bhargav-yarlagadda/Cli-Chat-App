@@ -17,7 +17,7 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-var baseURL = "http://localhost:8080/auth"
+// var baseURL = "http://localhost:8080/auth"
 
 // GenerateKeys generates a 2048-bit RSA key pair and returns PEM strings
 func GenerateKeys() (privateKeyPEM string, publicKeyPEM string, err error) {

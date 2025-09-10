@@ -35,11 +35,17 @@ func executor(input string) {
 	cmd := strings.ToLower(args[0])
 	cmdArgs := args[1:]
 
-	switch cmd {
+	switch strings.ToLower(cmd) {
 	case "register":
 		commands.Register(cmdArgs)
 	case "login":
 		commands.Login(cmdArgs)
+	case "add":
+		commands.AddUser(cmdArgs)
+	case "view-requests":
+		commands.ViewPendingRequests()
+	case "respond":
+		commands.RespondToConnectionRequest(cmdArgs)
 	case "help":
 	fmt.Println("\n=== Chat Application CLI Help ===")
 	fmt.Printf("%-15s : %s\n", "register", "Register a new user (generates public/private key pair)")
@@ -54,6 +60,7 @@ func executor(input string) {
 		os.Clearenv()
 		os.Exit(0)
 		return
+	
 	default:
 		fmt.Println("Unknown command. Type 'help' for a list of commands.")
 	}
