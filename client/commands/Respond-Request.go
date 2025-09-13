@@ -73,6 +73,7 @@ func RespondToConnectionRequest(args []string) {
 		targetUsername = strings.TrimPrefix(args[0], "--username:")
 	}
 
+
 	if targetUsername == "" {
 		fmt.Println("Pending Connection Requests:")
 		for _, req := range utils.Requests {

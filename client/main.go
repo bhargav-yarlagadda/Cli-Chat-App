@@ -12,17 +12,18 @@ import (
 	"github.com/c-bata/go-prompt"
 	"github.com/joho/godotenv"
 )
+
 func clearScreen() {
-    switch runtime.GOOS {
-    case "windows":
-        cmd := exec.Command("cmd", "/c", "cls")
-        cmd.Stdout = os.Stdout
-        cmd.Run()
-    default: // Linux, macOS
-        cmd := exec.Command("clear")
-        cmd.Stdout = os.Stdout
-        cmd.Run()
-    }
+	switch runtime.GOOS {
+	case "windows":
+		cmd := exec.Command("cmd", "/c", "cls")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	default: // Linux, macOS
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	}
 }
 func executor(input string) {
 	godotenv.Load()
@@ -47,12 +48,27 @@ func executor(input string) {
 	case "respond":
 		commands.RespondToConnectionRequest(cmdArgs)
 	case "help":
-	fmt.Println("\n=== Chat Application CLI Help ===")
-	fmt.Printf("%-15s : %s\n", "register", "Register a new user (generates public/private key pair)")
-	fmt.Printf("%-15s : %s\n", "login", "Login with your credentials and get a session JWT")
-	fmt.Printf("%-15s : %s\n", "clear", "Clear the terminal screen")
-	fmt.Printf("%-15s : %s\n", "exit", "Logout and clear current session JWT (optional command)")
-	fmt.Printf("%-15s : %s\n", "help", "Show this help message\n")
+		fmt.Println("\n=== Chat Application CLI Help ===")
+		fmt.Println("\nAuthentication Commands:")
+		fmt.Printf("%-20s : %s\n", "register", "Register a new user account")
+		fmt.Printf("%-20s   %s\n", "", "Usage: register --username:yourname --password:yourpass")
+		fmt.Printf("%-20s : %s\n", "login", "Login to your account")
+		fmt.Printf("%-20s   %s\n", "", "Usage: login --username:yourname --password:yourpass")
+
+		fmt.Println("\nConnection Management:")
+		fmt.Printf("%-20s : %s\n", "add", "Send a connection request to another user")
+		fmt.Printf("%-20s   %s\n", "", "Usage: add --username:targetuser")
+		fmt.Printf("%-20s : %s\n", "view-requests", "View all pending connection requests")
+		fmt.Printf("%-20s   %s\n", "", "Usage: view-requests")
+		fmt.Printf("%-20s : %s\n", "respond", "Accept or reject a connection request")
+		fmt.Printf("%-20s   %s\n", "", "Usage: respond --username:requester")
+
+		fmt.Println("\nSystem Commands:")
+		fmt.Printf("%-20s : %s\n", "clear", "Clear the terminal screen")
+		fmt.Printf("%-20s : %s\n", "exit", "Logout and exit the application")
+		fmt.Printf("%-20s : %s\n", "help", "Show this help message")
+
+		fmt.Println("\nNote: Most commands require you to be logged in first.")
 
 	case "clear":
 		clearScreen()
@@ -60,7 +76,7 @@ func executor(input string) {
 		os.Clearenv()
 		os.Exit(0)
 		return
-	
+
 	default:
 		fmt.Println("Unknown command. Type 'help' for a list of commands.")
 	}
