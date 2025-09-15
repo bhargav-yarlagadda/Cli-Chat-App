@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -13,7 +14,7 @@ import (
 	"strings"
 )
 
-// Chat starts a chat session
+// Chat starts a chat session with a given user
 func Chat(args []string) {
 	// --- 1. Get JWT token ---
 	jwtToken := os.Getenv("JWT_TOKEN")
@@ -41,31 +42,29 @@ func Chat(args []string) {
 		username = strings.TrimSpace(u)
 	}
 
-	// --- 3. Get current user's private key from file ---
+	// --- 3. Load current user's private key ---
 	currentUser := os.Getenv("CURRENT_USER")
 	if currentUser == "" {
 		fmt.Println("Please login first to obtain your username.")
 		return
 	}
 
-	// Load private key from file
 	keyFileName := fmt.Sprintf("keys/%s_private.pem", currentUser)
 	privKeyData, err := os.ReadFile(keyFileName)
 	if err != nil {
 		fmt.Printf("Could not find private key file at %s\n", keyFileName)
-		fmt.Println("If you haven't registered yet, please use the register command first.")
-		fmt.Println("If you have registered, make sure your private key file is in the correct location.")
-		fmt.Printf("Current user: %s\n", currentUser)
 		return
 	}
 
-	// Validate PEM format
 	if !strings.Contains(string(privKeyData), "-----BEGIN RSA PRIVATE KEY-----") {
 		fmt.Printf("Invalid private key format in %s\n", keyFileName)
-		fmt.Println("The key file should be in PEM format starting with -----BEGIN RSA PRIVATE KEY-----")
 		return
 	}
-	privKeyStr := string(privKeyData)
+	privKey, err := parsePrivateKey(string(privKeyData))
+	if err != nil {
+		fmt.Printf("Error parsing private key: %v\n", err)
+		return
+	}
 
 	// --- 4. Get receiver's public key from server ---
 	userInfo, exists := utils.GetUser(username, jwtToken)
@@ -73,55 +72,46 @@ func Chat(args []string) {
 		fmt.Println("User not found:", username)
 		return
 	}
-	receiverPubKeyStr := userInfo.PublicKey
-
-	// --- 5. Parse RSA keys ---
-	fmt.Printf("Loading private key for user %s...\n", currentUser)
-	privKey, err := parsePrivateKey(privKeyStr)
-	if err != nil {
-		fmt.Printf("Error parsing your private key from %s: %v\n", keyFileName, err)
-		fmt.Println("Please ensure your private key file is in the correct PEM format.")
-		return
-	}
-
-	fmt.Printf("Loading public key for user %s...\n", username)
-	receiverPubKey, err := parsePublicKey(receiverPubKeyStr)
+	receiverPubKey, err := parsePublicKey(userInfo.PublicKey)
 	if err != nil {
 		fmt.Printf("Error parsing %s's public key: %v\n", username, err)
-		fmt.Println("The user's public key may be invalid or corrupted.")
 		return
 	}
 
-	// Verify that we can encrypt and decrypt with these keys
-	fmt.Println("Verifying encryption keys...")
-	testMessage := []byte("test")
-	encrypted := encryptMessage(receiverPubKey, testMessage)
-	if encrypted == nil {
-		fmt.Printf("Failed to encrypt test message. Key verification failed.\n")
-		fmt.Printf("Current user: %s, Target user: %s\n", currentUser, username)
+	// --- 5. Connect to WebSocket server ---
+	wsURL := "ws://localhost:8080/chat"
+	client, err := utils.NewWSClient(jwtToken, wsURL)
+	if err != nil {
+		fmt.Println("Failed to connect to chat server:", err)
 		return
 	}
+	defer client.Close()
 
-	decrypted := decryptMessage(privKey, encrypted)
-	if decrypted == nil {
-		fmt.Println("Failed to decrypt test message. Key verification failed.")
-		fmt.Printf("Please ensure you're using the correct private key for user %s\n", currentUser)
-		return
-	}
-
-	if string(decrypted) != string(testMessage) {
-		fmt.Println("Key verification failed. Message encryption may not work.")
-		fmt.Printf("Expected test message: %q, Got: %q\n", testMessage, decrypted)
-		return
-	}
-
-	fmt.Println("✓ Encryption keys verified successfully")
-
-	// --- Ready to encrypt/decrypt messages ---
 	fmt.Printf("\nStarting chat with %s...\n", username)
 	fmt.Println("Type your message and press Enter to send. Type 'exit' to quit.")
 	fmt.Println("----------------------------------------")
 
+	// --- 6. Receive messages from server ---
+	go client.ReceiveMessages(func(sender, content string) {
+		if sender != username {
+			return
+		}
+		encryptedBytes, err := base64.StdEncoding.DecodeString(content)
+		if err != nil {
+			fmt.Printf("\nError decoding message: %v\n", err)
+			return
+		}
+
+		decrypted := decryptMessage(privKey, encryptedBytes)
+		if decrypted == nil {
+			fmt.Printf("\nFailed to decrypt message from %s\n", sender)
+			return
+		}
+
+		fmt.Printf("\n%s: %s\n", sender, string(decrypted))
+	})
+
+	// --- 7. Handle user input ---
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("\nYou: ")
@@ -133,25 +123,19 @@ func Chat(args []string) {
 			return
 		}
 
-		// Encrypt message for receiver
+		// Encrypt message
 		encrypted := encryptMessage(receiverPubKey, []byte(msg))
 		if encrypted == nil {
 			fmt.Println("Failed to encrypt message. Please try again.")
 			continue
 		}
 
-		// Decrypt message (for demonstration, using receiver's public key)
-		decrypted := decryptMessage(privKey, encrypted)
-		if decrypted == nil {
-			fmt.Println("Failed to decrypt message for verification. Message might not be delivered correctly.")
+		// Send over WebSocket
+		if err := client.SendMessage(username, encrypted); err != nil {
+			fmt.Printf("Failed to send message: %v\n", err)
 			continue
 		}
-
-		if string(decrypted) == msg {
-			fmt.Println("✓ Message encrypted successfully")
-		} else {
-			fmt.Println("⚠ Message encryption verification failed")
-		}
+		fmt.Println("✓ Message sent successfully")
 	}
 }
 
@@ -159,11 +143,8 @@ func Chat(args []string) {
 
 func parsePrivateKey(privPEM string) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(privPEM))
-	if block == nil {
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
 		return nil, fmt.Errorf("invalid private key PEM")
-	}
-	if block.Type != "RSA PRIVATE KEY" {
-		return nil, fmt.Errorf("expected RSA PRIVATE KEY, got %s", block.Type)
 	}
 	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
@@ -174,11 +155,8 @@ func parsePrivateKey(privPEM string) (*rsa.PrivateKey, error) {
 
 func parsePublicKey(pubPEM string) (*rsa.PublicKey, error) {
 	block, _ := pem.Decode([]byte(pubPEM))
-	if block == nil {
+	if block == nil || block.Type != "PUBLIC KEY" {
 		return nil, fmt.Errorf("invalid public key PEM")
-	}
-	if block.Type != "PUBLIC KEY" {
-		return nil, fmt.Errorf("expected PUBLIC KEY, got %s", block.Type)
 	}
 	pubInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
@@ -191,24 +169,15 @@ func parsePublicKey(pubPEM string) (*rsa.PublicKey, error) {
 	return pubKey, nil
 }
 
-// For RSA-2048, the maximum size of data that can be encrypted is the key size (2048 bits = 256 bytes)
-// minus padding (11 bytes for PKCS#1 v1.5)
-const maxMessageLength = 245 // 256 - 11 bytes for PKCS#1 v1.5 padding
+const maxMessageLength = 245 // PKCS#1 v1.5 padding
 
 func encryptMessage(pubKey *rsa.PublicKey, msg []byte) []byte {
-	msgLen := len(msg)
-	if msgLen == 0 {
-		return nil
-	}
-
-	// For small messages, encrypt directly
-	if msgLen <= maxMessageLength {
+	if len(msg) <= maxMessageLength {
 		ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey, msg)
 		if err != nil {
 			fmt.Printf("Encryption error: %v\n", err)
 			return nil
 		}
-		// Add length prefix for consistency with chunked messages
 		result := make([]byte, 2+len(ciphertext))
 		result[0] = byte(len(ciphertext) >> 8)
 		result[1] = byte(len(ciphertext))
@@ -216,22 +185,18 @@ func encryptMessage(pubKey *rsa.PublicKey, msg []byte) []byte {
 		return result
 	}
 
-	// For larger messages, split into chunks
 	var encrypted []byte
-	for i := 0; i < msgLen; i += maxMessageLength {
+	for i := 0; i < len(msg); i += maxMessageLength {
 		end := i + maxMessageLength
-		if end > msgLen {
-			end = msgLen
+		if end > len(msg) {
+			end = len(msg)
 		}
-
 		chunk := msg[i:end]
 		ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey, chunk)
 		if err != nil {
 			fmt.Printf("Chunk encryption error: %v\n", err)
 			return nil
 		}
-
-		// Store chunk length and data
 		chunkHeader := []byte{byte(len(ciphertext) >> 8), byte(len(ciphertext))}
 		encrypted = append(encrypted, chunkHeader...)
 		encrypted = append(encrypted, ciphertext...)
@@ -248,34 +213,24 @@ func decryptMessage(privKey *rsa.PrivateKey, ciphertext []byte) []byte {
 	var decrypted []byte
 	i := 0
 	for i < len(ciphertext) {
-		// Check if we have enough bytes for the chunk header
 		if i+2 > len(ciphertext) {
 			fmt.Println("Invalid ciphertext: truncated chunk header")
 			return nil
 		}
-
-		// Get chunk size from 2-byte header
 		size := int(ciphertext[i])<<8 | int(ciphertext[i+1])
 		i += 2
-
-		// Validate chunk size
 		if size <= 0 || size > 256 || i+size > len(ciphertext) {
-			fmt.Printf("Invalid chunk size: %d (total length: %d, current position: %d)\n",
-				size, len(ciphertext), i)
+			fmt.Println("Invalid chunk size in ciphertext")
 			return nil
 		}
-
-		// Extract and decrypt chunk
 		chunk := ciphertext[i : i+size]
 		plain, err := rsa.DecryptPKCS1v15(rand.Reader, privKey, chunk)
 		if err != nil {
-			fmt.Printf("Chunk decryption error at position %d (chunk size: %d): %v\n", i, size, err)
+			fmt.Printf("Chunk decryption error: %v\n", err)
 			return nil
 		}
-
 		decrypted = append(decrypted, plain...)
 		i += size
 	}
-
 	return decrypted
 }

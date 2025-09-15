@@ -5,6 +5,7 @@ go 1.23.4
 require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/go-resty/resty/v2 v2.16.5
+	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 )
 
