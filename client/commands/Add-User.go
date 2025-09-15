@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/go-resty/resty/v2"
 	"chat-client/utils"
+
+	"github.com/go-resty/resty/v2"
 )
 
 func AddUser(args []string) {
@@ -48,7 +49,7 @@ func AddUser(args []string) {
 	client := resty.New()
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetAuthToken(JWTToken). // add JWT token
+		SetHeader("Authorization", "Bearer "+JWTToken).
 		SetBody(map[string]string{
 			"username": username,
 		}).

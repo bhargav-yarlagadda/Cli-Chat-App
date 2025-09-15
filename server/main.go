@@ -11,42 +11,35 @@ import (
 	"github.com/joho/godotenv"
 )
 
-
-func main(){
+func main() {
 	err := godotenv.Load()
 	PORT := os.Getenv("PORT")
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	err =db.ConnectToDB()
-	if err != nil{
-	log.Fatal("Error in loading env: ",err)
+	err = db.ConnectToDB()
+	if err != nil {
+		log.Fatal("Error in loading env: ", err)
 	}
-	app := fiber.New() 
-	app.Get("/",func(c *fiber.Ctx) error{
-		return c.JSON(fiber.Map{"message":"Hello world"})
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"message": "Hello world"})
 	})
 	AuthRoutes := app.Group("/auth")
 	handlers.HandleAuth(AuthRoutes)
-
 
 	ConnectionRoutes := app.Group("/connections")
 	ConnectionRoutes.Use(middleware.JWTMiddleware()) // to validate the jwt sent by user
 	handlers.HandleConnections(ConnectionRoutes)
 
-	WebSocketRoutes := app.Group("/chat") 	
-	WebSocketRoutes.Use(handlers.JWTMiddleware())
-	WebSocketRoutes.Use(middleware.ValidateConnection()) // vadites wather both users are ocnnectied on not
+	WebSocketRoutes := app.Group("/chat")
+	WebSocketRoutes.Use(middleware.JWTMiddleware())      // Using consistent middleware from middleware package
+	WebSocketRoutes.Use(middleware.ValidateConnection()) // validates whether both users are connected or not
 	handlers.HandleWebSocketServer(WebSocketRoutes)
 
-
-
-	err=app.Listen(PORT)
-	if err != nil { 
-		log.Fatal("Error in staring the server ",err)
+	err = app.Listen(PORT)
+	if err != nil {
+		log.Fatal("Error in staring the server ", err)
 	}
 
-} 
-
-
-
+}

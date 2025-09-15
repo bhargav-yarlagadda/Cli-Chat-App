@@ -47,6 +47,8 @@ func executor(input string) {
 		commands.ViewPendingRequests()
 	case "respond":
 		commands.RespondToConnectionRequest(cmdArgs)
+	case "chat":
+		commands.Chat(cmdArgs)
 	case "help":
 		fmt.Println("\n=== Chat Application CLI Help ===")
 		fmt.Println("\nAuthentication Commands:")

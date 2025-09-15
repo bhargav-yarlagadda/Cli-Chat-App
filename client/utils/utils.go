@@ -15,10 +15,9 @@ type UserInfo struct {
 }
 
 type PendingRequest struct {
-	RequestID      uint   `json:"request_id"` // match server response format
+	RequestID      uint   `json:"request_id"`
 	SenderID       uint   `json:"sender_id"`
 	SenderUsername string `json:"sender_username"`
-	Status         string `json:"status"` // optional
 }
 
 var BaseURL = "http://localhost:8080" // replace with your server URL

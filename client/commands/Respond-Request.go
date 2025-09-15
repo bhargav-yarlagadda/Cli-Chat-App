@@ -9,8 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-resty/resty/v2"
 	"chat-client/utils"
+
+	"github.com/go-resty/resty/v2"
 )
 
 var mu sync.Mutex
@@ -31,7 +32,7 @@ func RespondToConnectionRequest(args []string) {
 	if utils.Requests == nil || len(utils.Requests) == 0 {
 		resp, err := client.R().
 			SetHeader("Content-Type", "application/json").
-			SetAuthToken(JWTToken).
+			SetHeader("Authorization", "Bearer "+JWTToken).
 			Get(utils.BaseURL + "/connections/pending")
 		if err != nil {
 			log.Fatal("Failed to fetch pending requests:", err)
@@ -42,10 +43,9 @@ func RespondToConnectionRequest(args []string) {
 		}
 
 		var rawRequests []struct {
-			ID            uint   `json:"id"`
-			SenderID      uint   `json:"sender_id"`
+			RequestID      uint   `json:"request_id"`
+			SenderID       uint   `json:"sender_id"`
 			SenderUsername string `json:"sender_username"`
-			Status        string `json:"status"`
 		}
 		if err := json.Unmarshal(resp.Body(), &rawRequests); err != nil {
 			log.Fatal("Failed to parse pending requests:", err)
@@ -54,10 +54,9 @@ func RespondToConnectionRequest(args []string) {
 		utils.Requests = make([]utils.PendingRequest, len(rawRequests))
 		for i, r := range rawRequests {
 			utils.Requests[i] = utils.PendingRequest{
-				RequestID:      r.ID,
+				RequestID:      r.RequestID,
 				SenderID:       r.SenderID,
 				SenderUsername: r.SenderUsername,
-				Status:         r.Status,
 			}
 		}
 	}
@@ -72,7 +71,6 @@ func RespondToConnectionRequest(args []string) {
 	if len(args) > 0 && strings.HasPrefix(args[0], "--username:") {
 		targetUsername = strings.TrimPrefix(args[0], "--username:")
 	}
-
 
 	if targetUsername == "" {
 		fmt.Println("Pending Connection Requests:")
@@ -117,7 +115,7 @@ func RespondToConnectionRequest(args []string) {
 
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetAuthToken(JWTToken).
+		SetHeader("Authorization", "Bearer "+JWTToken).
 		SetBody(body).
 		Post(utils.BaseURL + "/connections/respond")
 	if err != nil {

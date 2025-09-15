@@ -6,8 +6,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/go-resty/resty/v2"
 	"chat-client/utils"
+
+	"github.com/go-resty/resty/v2"
 )
 
 func ViewPendingRequests() {
@@ -24,7 +25,7 @@ func ViewPendingRequests() {
 	// Fetch pending requests
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetAuthToken(JWTToken).
+		SetHeader("Authorization", "Bearer "+JWTToken).
 		Get(utils.BaseURL + "/connections/pending")
 	if err != nil {
 		log.Fatal("Request failed:", err)
@@ -37,10 +38,9 @@ func ViewPendingRequests() {
 
 	// Use local struct to ensure proper unmarshaling
 	var rawRequests []struct {
-		ID            uint   `json:"id"`
-		SenderID      uint   `json:"sender_id"`
+		RequestID      uint   `json:"request_id"`
+		SenderID       uint   `json:"sender_id"`
 		SenderUsername string `json:"sender_username"`
-		Status        string `json:"status"`
 	}
 
 	if err := json.Unmarshal(resp.Body(), &rawRequests); err != nil {
@@ -51,10 +51,9 @@ func ViewPendingRequests() {
 	utils.Requests = make([]utils.PendingRequest, len(rawRequests))
 	for i, r := range rawRequests {
 		utils.Requests[i] = utils.PendingRequest{
-			RequestID:      r.ID,
+			RequestID:      r.RequestID,
 			SenderID:       r.SenderID,
 			SenderUsername: r.SenderUsername,
-			Status:         r.Status,
 		}
 	}
 

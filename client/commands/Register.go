@@ -109,12 +109,22 @@ func Register(args []string) {
 
 	// Check HTTP status
 	if resp.IsSuccess() {
+		// Create keys directory if it doesn't exist
+		if err := os.MkdirAll("keys", 0700); err != nil {
+			log.Fatal("Failed to create keys directory:", err)
+		}
+
+		// Save private key to file
+		keyFileName := fmt.Sprintf("keys/%s_private.pem", username)
+		if err := os.WriteFile(keyFileName, []byte(privateKey), 0600); err != nil {
+			log.Fatal("Failed to save private key:", err)
+		}
+
 		fmt.Println("\n✅ Registration successful!")
 		fmt.Println("----- IMPORTANT -----")
-		fmt.Println("Your PRIVATE KEY (keep it safe!):")
-		fmt.Println(privateKey)
-		fmt.Println("----- END OF PRIVATE KEY -----")
-		fmt.Println("Make sure to save it in a secure location. If lost, you will not be able to decrypt messages!")
+		fmt.Printf("Your private key has been saved to: %s\n", keyFileName)
+		fmt.Println("Keep this file safe and secure. If lost, you will not be able to decrypt messages!")
+		fmt.Println("Recommended: Back up this file in a secure location.")
 	} else {
 		fmt.Printf("❌ Registration failed: %s\n", resp.String())
 	}

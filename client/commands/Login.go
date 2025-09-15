@@ -8,9 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-resty/resty/v2"
 	"chat-client/utils"
 	"regexp"
+
+	"github.com/go-resty/resty/v2"
 )
 
 var JWTToken string // store token for session
@@ -55,9 +56,9 @@ func Login(args []string) {
 	}
 
 	if strings.Contains(username, " ") || strings.Contains(password, " ") {
-    fmt.Println("❌ Username and password cannot contain spaces.")
-    return
-}
+		fmt.Println("❌ Username and password cannot contain spaces.")
+		return
+	}
 	// Call backend
 	client := resty.New()
 	resp, err := client.R().
@@ -88,13 +89,14 @@ func Login(args []string) {
 		log.Fatal("Failed to parse login response:", err)
 	}
 
-	JWTToken = res.Token // store for session
-	os.Setenv("JWT_TOKEN", JWTToken) // optional: makes it available as env variable
+	JWTToken = res.Token                // store for session
+	os.Setenv("JWT_TOKEN", JWTToken)    // store JWT token
+	os.Setenv("CURRENT_USER", username) // store username for later use
 
 	fmt.Println("Login successful! JWT stored for session.")
 	pendingResp, err := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetAuthToken(JWTToken).
+		SetHeader("Authorization", "Bearer "+JWTToken).
 		Get(utils.BaseURL + "/connections/pending/count")
 
 	if err != nil {

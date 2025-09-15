@@ -34,8 +34,12 @@ func JWTMiddleware() fiber.Handler {
 			}
 			return []byte(secret), nil
 		})
-		if err != nil || !token.Valid {
+		if err != nil {
+			fmt.Printf("Token parsing error: %v\n", err)
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		if !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Token is not valid"})
 		}
 
 		// Extract claims
@@ -43,6 +47,9 @@ func JWTMiddleware() fiber.Handler {
 		if !ok {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
 		}
+
+		// Debug print claims
+		fmt.Printf("Token claims: %+v\n", claims)
 
 		// Get user ID from claims
 		userIDFloat, ok := claims["user_id"].(float64)
@@ -57,9 +64,10 @@ func JWTMiddleware() fiber.Handler {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 		}
 
-		// Store full user record in context for handlers
-		c.Locals("userDB", &user)
-		c.Locals("userClaims", claims) // optional, original claims
+		// Store user information in context for handlers
+		c.Locals("user", claims)   // Store claims in the same way as other handlers expect
+		c.Locals("userID", userID) // Also store parsed userID for convenience
+		c.Locals("userDB", &user)  // Store full user record
 
 		return c.Next()
 	}
