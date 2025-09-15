@@ -45,6 +45,7 @@ func GenerateKeys() (privateKeyPEM string, publicKeyPEM string, err error) {
 
 	return
 }
+
 // Register handles CLI registration
 func Register(args []string) {
 	// Check if --help or -h is present
@@ -78,6 +79,11 @@ func Register(args []string) {
 		fmt.Print("Enter password: ")
 		passwordInput, _ := reader.ReadString('\n')
 		password = strings.TrimSpace(passwordInput)
+	}
+
+	if strings.Contains(username, " ") || strings.Contains(password, " ") {
+		fmt.Println("❌ Username and password cannot contain spaces.")
+		return
 	}
 
 	// Generate RSA key pair

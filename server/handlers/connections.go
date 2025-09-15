@@ -196,6 +196,8 @@ func getPendingRequests(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+
+
 func HandleConnections(app fiber.Router) {
 	app.Get("/", getAllConnections)             // accepted connections
 	app.Get("/pending", getPendingRequests)     // pending requests for receiver

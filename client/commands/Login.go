@@ -54,6 +54,10 @@ func Login(args []string) {
 		password = strings.TrimSpace(p)
 	}
 
+	if strings.Contains(username, " ") || strings.Contains(password, " ") {
+    fmt.Println("❌ Username and password cannot contain spaces.")
+    return
+}
 	// Call backend
 	client := resty.New()
 	resp, err := client.R().

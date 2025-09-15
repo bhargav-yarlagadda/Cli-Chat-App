@@ -20,3 +20,13 @@ type Connection struct {
 	Receiver User `gorm:"foreignKey:ReceiverID" json:"-"`
 }
 
+
+type Message struct {
+    ID         uint      `gorm:"primaryKey" json:"id"`
+    SenderID   uint      `gorm:"not null" json:"sender_id"`
+    ReceiverID uint      `gorm:"not null" json:"receiver_id"`
+    Content    string    `gorm:"not null" json:"content"` // encrypted text
+    Delivered  bool      `gorm:"default:false" json:"delivered"`
+    CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+

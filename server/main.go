@@ -3,6 +3,7 @@ package main
 import (
 	"chat-server/db"
 	"chat-server/handlers"
+	"chat-server/middleware"
 	"log"
 	"os"
 
@@ -28,9 +29,18 @@ func main(){
 	AuthRoutes := app.Group("/auth")
 	handlers.HandleAuth(AuthRoutes)
 
+
 	ConnectionRoutes := app.Group("/connections")
-	ConnectionRoutes.Use(handlers.JWTMiddleware()) // to validate the jwt sent by user
+	ConnectionRoutes.Use(middleware.JWTMiddleware()) // to validate the jwt sent by user
 	handlers.HandleConnections(ConnectionRoutes)
+
+	WebSocketRoutes := app.Group("/chat") 	
+	WebSocketRoutes.Use(handlers.JWTMiddleware())
+	WebSocketRoutes.Use(middleware.ValidateConnection()) // vadites wather both users are ocnnectied on not
+	handlers.HandleWebSocketServer(WebSocketRoutes)
+
+
+
 	err=app.Listen(PORT)
 	if err != nil { 
 		log.Fatal("Error in staring the server ",err)
