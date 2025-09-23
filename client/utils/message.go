@@ -1,10 +1,14 @@
 package utils
 
 import (
-	"encoding/base64"
-	"fmt"
-	"github.com/gorilla/websocket"
-	"net/http"
+    "encoding/base64"
+    "fmt"
+    "github.com/gorilla/websocket"
+    "errors"
+    "net"
+    "net/http"
+    "strings"
+    "time"
 )
 
 // WSClient represents a WebSocket connection
@@ -49,7 +53,13 @@ func (c *WSClient) ReceiveMessages(handle func(sender, content string)) {
 		var msg map[string]interface{}
 		err := c.Conn.ReadJSON(&msg)
 		if err != nil {
-			fmt.Println("Error reading message:", err)
+            // Suppress expected errors on normal shutdown
+            if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) ||
+                strings.Contains(err.Error(), "use of closed network connection") ||
+                errors.Is(err, net.ErrClosed) {
+                return
+            }
+            fmt.Println("Error reading message:", err)
 			return
 		}
 
@@ -62,5 +72,7 @@ func (c *WSClient) ReceiveMessages(handle func(sender, content string)) {
 
 // Close closes the WebSocket connection
 func (c *WSClient) Close() error {
-	return c.Conn.Close()
+    // Send close control frame for graceful shutdown
+    _ = c.Conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
+    return c.Conn.Close()
 }

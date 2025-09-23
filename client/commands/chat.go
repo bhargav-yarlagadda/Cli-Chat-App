@@ -12,6 +12,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Chat starts a chat session with a given user
@@ -108,13 +109,29 @@ func Chat(args []string) {
 			return
 		}
 
-		fmt.Printf("\n%s: %s\n", sender, string(decrypted))
+		// Pretty print with timestamp and indentation for multiline messages
+		// Move to line start to avoid leaving the prompt mid-line
+		fmt.Print("\r")
+		text := string(decrypted)
+		lines := strings.Split(text, "\n")
+		ts := time.Now().Format("15:04")
+		if len(lines) > 0 {
+			fmt.Printf("\n[%s] %s: %s\n", ts, sender, strings.TrimRight(lines[0], "\r"))
+			for i := 1; i < len(lines); i++ {
+				fmt.Printf("%s\n", strings.TrimRight(lines[i], "\r"))
+			}
+		} else {
+			fmt.Printf("\n[%s] %s:\n", ts, sender)
+		}
+		// Restore prompt
+		fmt.Print("You: ")
 	})
 
 	// --- 7. Handle user input ---
 	reader := bufio.NewReader(os.Stdin)
+	// Initial prompt
+	fmt.Print("You: ")
 	for {
-		fmt.Print("\nYou: ")
 		msg, _ := reader.ReadString('\n')
 		msg = strings.TrimSpace(msg)
 
@@ -136,6 +153,8 @@ func Chat(args []string) {
 			continue
 		}
 		fmt.Println("✓ Message sent successfully")
+		// Redisplay prompt
+		fmt.Print("You: ")
 	}
 }
 

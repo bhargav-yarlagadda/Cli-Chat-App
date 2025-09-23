@@ -18,7 +18,7 @@ func ConnectToDB()error {
 	dbUrl := os.Getenv("DB_URL")
 	db,err := gorm.Open(postgres.Open(dbUrl),&gorm.Config{})
 	// create table if not exists or update it if any columns changes
-	if err := db.AutoMigrate(&User{}, &Connection{}); err != nil {
+    if err := db.AutoMigrate(&User{}, &Connection{}, &Message{}); err != nil {
 		return err
 	}
 	DB_Conn = db 

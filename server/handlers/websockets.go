@@ -138,6 +138,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
+    "github.com/golang-jwt/jwt/v5"
 )
 
 // Clients stores userID -> []*websocket.Conn
@@ -160,8 +161,8 @@ func HandleWebSocketServer(router fiber.Router) {
 
 	router.Get("/", websocket.New(func(conn *websocket.Conn) {
 		// --- 1. Identify user from Locals (JWT claims must be stored here) ---
-		claims := conn.Locals("user").(map[string]interface{})
-		senderID := uint(claims["user_id"].(float64))
+        claims := conn.Locals("user").(jwt.MapClaims)
+        senderID := uint(claims["user_id"].(float64))
 
 		// --- 2. Add connection to Clients map ---
 		conns, _ := Clients.LoadOrStore(senderID, []*websocket.Conn{})
@@ -192,6 +193,34 @@ func HandleWebSocketServer(router fiber.Router) {
 
 		log.Printf("User %d connected via WebSocket\n", senderID)
 
+		// On connect: deliver any undelivered messages to this user
+		{
+			var backlog []db.Message
+			db.DB_Conn.Where("receiver_id = ? AND delivered = ?", senderID, false).
+				Order("created_at asc").Find(&backlog)
+
+			if len(backlog) > 0 {
+				if conns, ok := Clients.Load(senderID); ok {
+					for _, c := range conns.([]*websocket.Conn) {
+						for _, msg := range backlog {
+							var fromUser db.User
+							if err := db.DB_Conn.Select("username").First(&fromUser, msg.SenderID).Error; err != nil {
+								log.Println("Failed to load sender username for backlog message:", msg.ID)
+								continue
+							}
+							payload := map[string]interface{}{
+								"sender_username": fromUser.Username,
+								"content":          msg.Content,
+							}
+							out, _ := json.Marshal(payload)
+							c.WriteMessage(websocket.TextMessage, out)
+							db.DB_Conn.Model(&msg).Update("delivered", true)
+						}
+					}
+				}
+			}
+		}
+
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -216,6 +245,13 @@ func handleIncomingMessage(senderID uint, raw []byte) {
 	var receiver db.User
 	if err := db.DB_Conn.Where("username = ?", incoming.ReceiverUsername).First(&receiver).Error; err != nil {
 		log.Println("Receiver not found:", incoming.ReceiverUsername)
+		return
+	}
+
+	// Also fetch sender username (for payloads to receiver)
+	var senderUser db.User
+	if err := db.DB_Conn.First(&senderUser, senderID).Error; err != nil {
+		log.Println("Sender not found:", senderID)
 		return
 	}
 
@@ -251,7 +287,17 @@ func handleIncomingMessage(senderID uint, raw []byte) {
 	if conns, ok := Clients.Load(senderID); ok {
 		for _, c := range conns.([]*websocket.Conn) {
 			for _, msg := range undelivered {
-				out, _ := json.Marshal(msg)
+				// Lookup sender username for each undelivered message
+				var fromUser db.User
+				if err := db.DB_Conn.Select("username").First(&fromUser, msg.SenderID).Error; err != nil {
+					log.Println("Failed to load sender username for message:", msg.ID)
+					continue
+				}
+				payload := map[string]interface{}{
+					"sender_username": fromUser.Username,
+					"content":          msg.Content,
+				}
+				out, _ := json.Marshal(payload)
 				c.WriteMessage(websocket.TextMessage, out)
 				db.DB_Conn.Model(&msg).Update("delivered", true)
 			}
@@ -261,7 +307,11 @@ func handleIncomingMessage(senderID uint, raw []byte) {
 	// --- 5. Deliver message to receiver if online ---
 	if conns, ok := Clients.Load(receiver.ID); ok {
 		for _, c := range conns.([]*websocket.Conn) {
-			out, _ := json.Marshal(message)
+			payload := map[string]interface{}{
+				"sender_username": senderUser.Username,
+				"content":          message.Content,
+			}
+			out, _ := json.Marshal(payload)
 			if err := c.WriteMessage(websocket.TextMessage, out); err != nil {
 				log.Println("send error:", err)
 				continue
